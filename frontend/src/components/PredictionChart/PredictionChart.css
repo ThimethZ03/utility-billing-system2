@@ -1,0 +1,9 @@
+.predict__wrap { overflow: hidden; }
+.predict__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.predict__title { font-weight: 700; }
+.predict__sub { color: #9fb3c8; }
+.predict__chart { margin-top: 8px; }

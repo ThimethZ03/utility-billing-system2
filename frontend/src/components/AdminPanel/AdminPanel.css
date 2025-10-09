@@ -1,0 +1,28 @@
+.admin__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.admin__tabs button {
+  background: #11192a;
+  color: #cbd5e1;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.admin__tabs button.active {
+  color: #fff;
+  background: rgba(79,140,255,0.15);
+  border-color: rgba(79,140,255,0.25);
+}
+.admin__section { margin-top: 8px; }
+.admin__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.admin__branch-title { font-weight: 600; }
+.admin__branch-sub { color: #9fb3c8; margin-top: 4px; }
+.admin__muted { color: #9fb3c8; }
