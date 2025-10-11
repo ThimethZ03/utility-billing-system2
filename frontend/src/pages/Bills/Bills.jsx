@@ -40,6 +40,59 @@ export default function Bills() {
     load();
   };
 
+  // NEW: Import handler
+  const onImportData = async (importedData) => {
+    try {
+      if (branches.length === 0) {
+        alert('❌ Please create at least one branch before importing bills');
+        return;
+      }
+
+      // Use first branch as default or ask user
+      const defaultBranch = branches[0];
+      
+      console.log('Importing data:', importedData);
+      
+      let successCount = 0;
+      let failCount = 0;
+
+      // Import each bill
+      for (const data of importedData) {
+        try {
+          const billPayload = {
+            branchId: defaultBranch._id,
+            type: data.type || 'Electricity',
+            units: Number(data.units),
+            amount: Number(data.amount),
+            dueDate: data.dueDate,
+            status: 'Pending',
+            periodStart: new Date().toISOString().split('T')[0]
+          };
+
+          await createBill(billPayload);
+          successCount++;
+        } catch (error) {
+          console.error('Failed to import bill:', data, error);
+          failCount++;
+        }
+      }
+
+      // Reload bills
+      await load();
+
+      // Show result
+      if (successCount > 0) {
+        alert(`✅ Successfully imported ${successCount} bills${failCount > 0 ? `\n⚠️ ${failCount} bills failed` : ''}!\n\n📊 Bills added to: ${defaultBranch.name}`);
+      } else {
+        alert('❌ Failed to import bills. Please check the CSV format.');
+      }
+
+    } catch (error) {
+      console.error('Import error:', error);
+      alert('❌ Import failed. Please check console for details.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="page-loading">
@@ -61,6 +114,7 @@ export default function Bills() {
         branchMap={branchMap}
         onStatusChange={onStatusChange}
         onCreateBill={onCreateBill}
+        onImportData={onImportData}
       />
     </div>
   );

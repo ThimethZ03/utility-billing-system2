@@ -34,10 +34,6 @@ export default function Navbar() {
                 <Building2 size={18} />
                 <span>Branches</span>
               </Link>
-              <Link className={pathname === '/reports' ? 'nav__link active' : 'nav__link'} to="/reports">
-                <BarChart3 size={18} />
-                <span>Reports</span>
-              </Link>
               <Link className={pathname === '/settings' ? 'nav__link active' : 'nav__link'} to="/settings">
                 <Settings size={18} />
                 <span>Settings</span>

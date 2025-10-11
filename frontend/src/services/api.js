@@ -202,6 +202,101 @@ export const fetchPredictions = async (params = {}) => {
   });
 };
 
+/**
+ * Get predictions for all branches automatically
+ */
+export const getAllBranchesPredictions = async () => {
+  return new Promise(async (resolve) => {
+    try {
+      const branches = await fetchBranches();
+      const bills = await fetchBills();
+      const predictions = [];
+
+      for (const branch of branches) {
+        // Get bills for this branch
+        const branchBills = bills
+          .filter(b => b.branchId === branch._id)
+          .sort((a, b) => new Date(a.periodStart || a.createdAt) - new Date(b.periodStart || b.createdAt))
+          .slice(-6); // Last 6 months
+
+        if (branchBills.length < 2) {
+          predictions.push({
+            branch: {
+              _id: branch._id,
+              name: branch.name,
+              location: branch.location
+            },
+            status: 'insufficient_data',
+            message: 'Need at least 2 months of bills for predictions'
+          });
+          continue;
+        }
+
+        // Calculate prediction
+        const historicalData = branchBills.map((bill, index) => ({
+          month: index + 1,
+          units: bill.units,
+          amount: bill.amount
+        }));
+
+        const totalUnits = historicalData.reduce((sum, d) => sum + d.units, 0);
+        const totalAmount = historicalData.reduce((sum, d) => sum + d.amount, 0);
+        
+        const lastUnits = historicalData[historicalData.length - 1].units;
+        const firstUnits = historicalData[0].units;
+        const growthRate = ((lastUnits - firstUnits) / firstUnits) * 100;
+        
+        // Simple linear prediction with trend
+        const trendFactor = 1 + (growthRate / 100);
+        const predictedUnits = Math.round(lastUnits * trendFactor);
+        const avgCostPerUnit = totalAmount / totalUnits;
+        const predictedAmount = Math.round(predictedUnits * avgCostPerUnit);
+
+        // Determine trend
+        let trend = 'stable';
+        if (growthRate > 5) trend = 'increasing';
+        else if (growthRate < -5) trend = 'decreasing';
+
+        // Determine confidence based on data points
+        let confidence = 'low';
+        if (historicalData.length >= 6) confidence = 'high';
+        else if (historicalData.length >= 4) confidence = 'medium';
+
+        predictions.push({
+          branch: {
+            _id: branch._id,
+            name: branch.name,
+            location: branch.location
+          },
+          predicted_units: predictedUnits,
+          predicted_amount: predictedAmount,
+          growth_rate: growthRate.toFixed(2),
+          trend: trend,
+          confidence: confidence,
+          data_points: historicalData.length,
+          avg_cost_per_unit: avgCostPerUnit.toFixed(2),
+          status: 'success'
+        });
+      }
+
+      setTimeout(() => resolve({
+        total_branches: branches.length,
+        predictions_generated: predictions.filter(p => p.status === 'success').length,
+        predictions
+      }), 500);
+
+    } catch (error) {
+      console.error('All predictions error:', error);
+      resolve({ 
+        total_branches: 0,
+        predictions_generated: 0,
+        predictions: [],
+        error: error.message 
+      });
+    }
+  });
+};
+
 // ==================== ALERT SYSTEM ====================
 
 /**

@@ -52,14 +52,6 @@ export default function App() {
             }
           />
           <Route
-            path="/reports"
-            element={
-              <RequireAuth>
-                <Reports />
-              </RequireAuth>
-            }
-          />
-          <Route
             path="/settings"
             element={
               <RequireAuth>
