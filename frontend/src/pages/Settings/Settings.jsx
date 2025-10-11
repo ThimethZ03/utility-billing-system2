@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './Settings.css';
 import { Settings as SettingsIcon, Save, AlertTriangle, DollarSign, Zap, Mail, Bell } from 'lucide-react';
 import { getAlertSettings, updateAlertSettings } from '../../services/api';
+import { sendTestEmail } from '../../services/emailServiceWeb3';
 
 export default function Settings() {
   const [settings, setSettings] = useState({
@@ -15,6 +16,7 @@ export default function Settings() {
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function Settings() {
           alertEmails: [...prev.alertEmails, newEmail]
         }));
         setNewEmail('');
+        showMessage('success', `Email ${newEmail} added successfully`);
       } else {
         showMessage('error', 'Email already added');
       }
@@ -79,11 +82,42 @@ export default function Settings() {
       ...prev,
       alertEmails: prev.alertEmails.filter(e => e !== email)
     }));
+    showMessage('success', `Email ${email} removed`);
+  };
+
+  const handleTestEmail = async () => {
+    if (settings.alertEmails.length === 0) {
+      showMessage('error', 'Please add at least one email address first');
+      return;
+    }
+
+    const WEB3FORMS_KEY = import.meta.env.VITE_WEB3FORMS_KEY;
+    if (!WEB3FORMS_KEY || WEB3FORMS_KEY === '') {
+      showMessage('error', '⚠️ Email service not configured. Add VITE_WEB3FORMS_KEY to .env file');
+      return;
+    }
+
+    setTestingEmail(true);
+
+    try {
+      const result = await sendTestEmail(settings.alertEmails[0]);
+      
+      if (result.success) {
+        showMessage('success', `✅ Test email sent to ${settings.alertEmails[0]}. Check your inbox!`);
+      } else {
+        showMessage('error', `❌ Failed to send: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Test email error:', error);
+      showMessage('error', 'Failed to send test email. Check console for details.');
+    } finally {
+      setTestingEmail(false);
+    }
   };
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage({ type: '', text: '' }), 4000);
+    setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
   if (loading) {
@@ -235,17 +269,47 @@ export default function Settings() {
           </div>
 
           {settings.alertEmails.length > 0 ? (
-            <div className="email-list">
-              {settings.alertEmails.map((email, index) => (
-                <div key={index} className="email-item">
-                  <Mail size={16} />
-                  <span>{email}</span>
-                  <button className="remove-email-btn" onClick={() => removeEmail(email)}>
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="email-list">
+                {settings.alertEmails.map((email, index) => (
+                  <div key={index} className="email-item">
+                    <Mail size={16} />
+                    <span>{email}</span>
+                    <button className="remove-email-btn" onClick={() => removeEmail(email)}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Test Email Button */}
+              <div className="email-actions">
+                <button 
+                  className="test-email-btn" 
+                  onClick={handleTestEmail}
+                  disabled={testingEmail}
+                >
+                  {testingEmail ? (
+                    <>
+                      <div className="spinner"></div>
+                      Sending test email...
+                    </>
+                  ) : (
+                    <>
+                      📧 Send Test Email
+                    </>
+                  )}
+                </button>
+                
+                {!import.meta.env.VITE_WEB3FORMS_KEY && (
+                  <div className="config-warning">
+                    ⚠️ Email service not configured. Add VITE_WEB3FORMS_KEY to your .env file.
+                    <br />
+                    Get free key from: <a href="https://web3forms.com" target="_blank" rel="noreferrer">web3forms.com</a>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <div className="empty-emails">
               <p>No email addresses added yet</p>

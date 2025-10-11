@@ -492,3 +492,60 @@
     border-bottom: none;
   }
 }
+
+/* Email Actions Section */
+.email-actions {
+  margin-top: 20px;
+}
+
+.test-email-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.test-email-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.test-email-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.config-warning {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #92400e;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.config-warning a {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.config-warning a:hover {
+  text-decoration: underline;
+}

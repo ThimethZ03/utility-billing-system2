@@ -1,5 +1,6 @@
 // services/api.js
 import axios from 'axios';
+import { sendThresholdAlert } from './emailServiceWeb3';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
 
@@ -7,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000
 const http = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
-  timeout: 10000, // 10 second timeout
+  timeout: 10000,
 });
 
 // Request interceptor - add auth token
@@ -56,6 +57,12 @@ const MOCK_BILLS = [
 let localBranches = [...MOCK_BRANCHES];
 let localBills = [...MOCK_BILLS];
 let idCounter = 100;
+
+// Track last alert sent to prevent spam
+let lastAlertSent = {
+  units: null,
+  amount: null
+};
 
 // ==================== BRANCHES ====================
 
@@ -116,7 +123,6 @@ export const fetchBills = async (params = {}) => {
   });
 };
 
-// Alias for compatibility
 export const getAllBills = fetchBills;
 
 export const createBill = async (payload) => {
@@ -204,7 +210,6 @@ export const fetchPredictions = async (params = {}) => {
 export const getAlertSettings = async () => {
   return new Promise((resolve) => {
     try {
-      // Try to load from localStorage first
       const saved = localStorage.getItem('alert_settings');
       if (saved) {
         const settings = JSON.parse(saved);
@@ -215,11 +220,10 @@ export const getAlertSettings = async () => {
       console.error('Error loading saved settings:', e);
     }
 
-    // Default settings
     const defaultSettings = {
       maxMonthlyAmount: 80000,
       maxMonthlyUnits: 1500,
-      alertEmails: ['admin@utility.com'],
+      alertEmails: [],
       enableEmailAlerts: false,
       enablePushAlerts: true,
     };
@@ -234,18 +238,15 @@ export const getAlertSettings = async () => {
 export const updateAlertSettings = async (payload) => {
   return new Promise((resolve) => {
     try {
-      // Get existing settings
       const saved = localStorage.getItem('alert_settings');
       const existing = saved ? JSON.parse(saved) : {};
 
-      // Merge with new settings
       const updated = {
         ...existing,
         ...payload,
         updatedAt: new Date().toISOString()
       };
 
-      // Save to localStorage
       localStorage.setItem('alert_settings', JSON.stringify(updated));
 
       setTimeout(() => resolve(updated), 200);
@@ -257,12 +258,30 @@ export const updateAlertSettings = async (payload) => {
 };
 
 /**
- * Check if current usage exceeds limits
+ * Check if we should send alert (prevent spam - max 1 per day per type)
+ */
+const shouldSendAlert = (alertType) => {
+  const lastSent = lastAlertSent[alertType];
+  if (!lastSent) return true;
+  
+  const hoursSince = (Date.now() - lastSent) / (1000 * 60 * 60);
+  return hoursSince >= 24; // Send max once per 24 hours
+};
+
+/**
+ * Mark alert as sent
+ */
+const markAlertSent = (alertType) => {
+  lastAlertSent[alertType] = Date.now();
+  localStorage.setItem('last_alert_sent', JSON.stringify(lastAlertSent));
+};
+
+/**
+ * Check if current usage exceeds limits and send emails
  */
 export const checkAlerts = async () => {
   return new Promise(async (resolve) => {
     try {
-      // Get current settings
       const settings = await getAlertSettings();
 
       const currentMonth = new Date().getMonth();
@@ -277,41 +296,90 @@ export const checkAlerts = async () => {
       const totalAmount = monthlyBills.reduce((sum, b) => sum + Number(b.amount || 0), 0);
 
       const alerts = [];
+      const emailResults = [];
 
       // Check units threshold
       if (totalUnits > settings.maxMonthlyUnits) {
-        alerts.push({
+        const percentage = Math.round((totalUnits / settings.maxMonthlyUnits) * 100);
+        
+        const alert = {
           type: 'units',
           message: `Monthly units (${totalUnits}) exceeded limit (${settings.maxMonthlyUnits})`,
           severity: 'warning',
           current: totalUnits,
           limit: settings.maxMonthlyUnits,
-          percentage: Math.round((totalUnits / settings.maxMonthlyUnits) * 100)
-        });
+          percentage
+        };
+        
+        alerts.push(alert);
+
+        // Send email if enabled and not sent recently
+        if (settings.enableEmailAlerts && shouldSendAlert('units')) {
+          try {
+            const emailResult = await sendThresholdAlert(settings, alert);
+            emailResults.push({ type: 'units', ...emailResult });
+            
+            if (emailResult.success) {
+              markAlertSent('units');
+              console.log('✅ Units alert email sent');
+            }
+          } catch (emailError) {
+            console.error('Email send error:', emailError);
+            emailResults.push({ type: 'units', success: false, error: emailError.message });
+          }
+        }
       }
 
       // Check amount threshold
       if (totalAmount > settings.maxMonthlyAmount) {
-        alerts.push({
+        const percentage = Math.round((totalAmount / settings.maxMonthlyAmount) * 100);
+        
+        const alert = {
           type: 'amount',
           message: `Monthly amount (Rs. ${totalAmount.toLocaleString('en-IN')}) exceeded limit (Rs. ${settings.maxMonthlyAmount.toLocaleString('en-IN')})`,
           severity: 'danger',
           current: totalAmount,
           limit: settings.maxMonthlyAmount,
-          percentage: Math.round((totalAmount / settings.maxMonthlyAmount) * 100)
-        });
+          percentage
+        };
+        
+        alerts.push(alert);
+
+        // Send email if enabled and not sent recently
+        if (settings.enableEmailAlerts && shouldSendAlert('amount')) {
+          try {
+            const emailResult = await sendThresholdAlert(settings, alert);
+            emailResults.push({ type: 'amount', ...emailResult });
+            
+            if (emailResult.success) {
+              markAlertSent('amount');
+              console.log('✅ Amount alert email sent');
+            }
+          } catch (emailError) {
+            console.error('Email send error:', emailError);
+            emailResults.push({ type: 'amount', success: false, error: emailError.message });
+          }
+        }
       }
 
       setTimeout(() => resolve({ 
         alerts, 
         totalUnits, 
         totalAmount,
-        settings 
+        settings,
+        emailResults,
+        emailsSent: emailResults.filter(r => r.success).length
       }), 200);
 
     } catch (error) {
       console.error('Check alerts error:', error);
-      resolve({ alerts: [], totalUnits: 0, totalAmount: 0 });
+      resolve({ 
+        alerts: [], 
+        totalUnits: 0, 
+        totalAmount: 0,
+        emailResults: [],
+        emailsSent: 0
+      });
     }
   });
 };
@@ -376,6 +444,8 @@ export const resetMockData = () => {
   localBills = [...MOCK_BILLS];
   idCounter = 100;
   localStorage.removeItem('alert_settings');
+  localStorage.removeItem('last_alert_sent');
+  lastAlertSent = { units: null, amount: null };
   return { success: true };
 };
 
@@ -389,4 +459,14 @@ export const getMockStats = () => {
     totalUnits: localBills.reduce((sum, b) => sum + b.units, 0),
     totalAmount: localBills.reduce((sum, b) => sum + b.amount, 0)
   };
+};
+
+/**
+ * Manually trigger alert check (for testing)
+ */
+export const triggerAlertCheck = async () => {
+  console.log('🔔 Manually checking alerts...');
+  const result = await checkAlerts();
+  console.log('Alert check result:', result);
+  return result;
 };
